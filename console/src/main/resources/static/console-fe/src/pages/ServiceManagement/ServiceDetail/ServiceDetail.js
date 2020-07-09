@@ -1,9 +1,12 @@
 /*
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +21,7 @@ import { Input, Button, Card, ConfigProvider, Form, Loading, Message } from '@al
 import EditServiceDialog from './EditServiceDialog';
 import EditClusterDialog from './EditClusterDialog';
 import InstanceTable from './InstanceTable';
-import { getParameter, processMetaData } from 'utils/nacosutil';
+import { getParameter } from 'utils/nacosutil';
 import MonacoEditor from 'components/MonacoEditor';
 import { MONACO_READONLY_OPTIONS, METADATA_ENTER } from './constant';
 import './ServiceDetail.scss';
@@ -95,7 +98,10 @@ class ServiceDetail extends React.Component {
     const { locale = {} } = this.props;
     const { serviceName, groupName, loading, service = {}, clusters } = this.state;
     const { metadata = {}, selector = {} } = service;
-    const metadataText = processMetaData(METADATA_ENTER)(metadata);
+    let metadataText = '';
+    if (Object.keys(metadata).length) {
+      metadataText = JSON.stringify(metadata, null, '\t');
+    }
     return (
       <div className="main-container service-detail">
         <Loading
@@ -140,7 +146,7 @@ class ServiceDetail extends React.Component {
             </FormItem>
             <FormItem label={`${locale.metadata}:`}>
               <MonacoEditor
-                language={'properties'}
+                language="json"
                 width={'100%'}
                 height={200}
                 value={metadataText}

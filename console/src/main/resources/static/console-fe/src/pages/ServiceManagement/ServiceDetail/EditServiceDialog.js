@@ -1,9 +1,12 @@
 /*
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,7 +20,6 @@ import { request } from '../../../globalLib';
 import { Dialog, Form, Input, Select, Message, ConfigProvider } from '@alifd/next';
 import { DIALOG_FORM_LAYOUT, METADATA_SEPARATOR, METADATA_ENTER } from './constant';
 import MonacoEditor from 'components/MonacoEditor';
-import { replaceEnter, processMetaData } from 'utils/nacosutil';
 
 @ConfigProvider.config
 class EditServiceDialog extends React.Component {
@@ -44,7 +46,7 @@ class EditServiceDialog extends React.Component {
     let editService = _editService;
     const { metadata = {}, name } = editService;
     if (Object.keys(metadata).length) {
-      editService.metadataText = processMetaData(METADATA_ENTER)(metadata);
+      editService.metadataText = JSON.stringify(metadata, null, '\t');
     }
     this.setState({ editService, editServiceDialogVisible: true, isCreate: !name });
   }
@@ -85,7 +87,7 @@ class EditServiceDialog extends React.Component {
         serviceName: name,
         groupName: groupName || 'DEFAULT_GROUP',
         protectThreshold,
-        metadata: replaceEnter(METADATA_SEPARATOR)(metadataText),
+        metadata: metadataText,
         selector: JSON.stringify(selector),
       },
       dataType: 'text',
@@ -181,7 +183,7 @@ class EditServiceDialog extends React.Component {
           </Form.Item>
           <Form.Item label={`${locale.metadata}:`} {...formItemLayout}>
             <MonacoEditor
-              language={'properties'}
+              language="json"
               width={'100%'}
               height={200}
               value={metadataText}

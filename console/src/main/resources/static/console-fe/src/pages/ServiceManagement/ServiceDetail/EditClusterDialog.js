@@ -1,9 +1,12 @@
 /*
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,7 +20,6 @@ import { request } from '../../../globalLib';
 import { Dialog, Form, Input, Switch, Select, Message, ConfigProvider } from '@alifd/next';
 import { DIALOG_FORM_LAYOUT, METADATA_SEPARATOR, METADATA_ENTER } from './constant';
 import MonacoEditor from 'components/MonacoEditor';
-import { replaceEnter, processMetaData } from 'utils/nacosutil';
 
 @ConfigProvider.config
 class EditClusterDialog extends React.Component {
@@ -42,7 +44,9 @@ class EditClusterDialog extends React.Component {
   show(_editCluster) {
     let editCluster = _editCluster;
     const { metadata = {} } = editCluster;
-    editCluster.metadataText = processMetaData(METADATA_ENTER)(metadata);
+    if (Object.keys(metadata).length) {
+      editCluster.metadataText = JSON.stringify(metadata, null, '\t');
+    }
     this.setState({
       editCluster,
       editClusterDialogVisible: true,
@@ -69,7 +73,7 @@ class EditClusterDialog extends React.Component {
       data: {
         serviceName,
         clusterName: name,
-        metadata: replaceEnter(METADATA_SEPARATOR)(metadataText),
+        metadata: metadataText,
         checkPort: defaultCheckPort,
         useInstancePort4Check: useIPPort4Check,
         healthChecker: JSON.stringify(healthChecker),
@@ -163,7 +167,7 @@ class EditClusterDialog extends React.Component {
           ]}
           <Form.Item label={`${locale.metadata}:`}>
             <MonacoEditor
-              language={'properties'}
+              language="json"
               width={'100%'}
               height={200}
               value={metadataText}

@@ -1,9 +1,12 @@
 /*
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,30 +50,25 @@ export const getParameter = (search, name) => {
   return value;
 };
 
-/**
- * 将回车符和空格替换
- * @param {*} separator 替换符
- */
-export const replaceEnter = (separator = ',') => text => {
-  if (typeof text !== 'string') {
-    return text;
-  }
-
-  return text
-    .replace(/\r\n/g, separator)
-    .replace(/[\r\n]/g, separator)
-    .replace(/[\t\s]/g, '');
+export const isJsonString = str => {
+  try {
+    if (typeof JSON.parse(str) === 'object') {
+      return true;
+    }
+  } catch (e) {}
+  return false;
 };
 
-/**
- * 处理metaData对象生成可显示对象
- */
-export const processMetaData = (separator = ',') => (metadata = {}) => {
-  if (Object.prototype.toString.call(metadata) !== '[object Object]') {
-    return '';
-  }
+export const generateUrl = (url, params) => {
+  return [
+    url,
+    '?',
+    Object.keys(params)
+      .map(key => [key, params[key]].join('='))
+      .join('&'),
+  ].join('');
+};
 
-  return Object.keys(metadata)
-    .map(key => `${key}=${metadata[key]}`)
-    .join(separator);
+export const isPlainObject = obj => {
+  return Object.prototype.toString.call(obj) === '[object Object]';
 };

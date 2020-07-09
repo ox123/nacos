@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.alibaba.nacos.config.server.utils;
 
 import org.apache.commons.lang3.CharUtils;
@@ -24,9 +25,9 @@ import org.apache.commons.lang3.CharUtils;
  * @version 创建时间：2008-12-30 下午07:09:52 类说明
  */
 public class RegexParser {
-
+    
     private final static char QUESTION_MARK = '?';
-
+    
     /**
      * 替换输入字符串中非正则特殊字符为标准正则表达式字符串; <br> '*'替换为 ‘.*’ '?'替换为'{n}'，n为连续?的个数; <br> 其他非字母或数字的特殊字符前均添加'\'.
      *
@@ -37,7 +38,7 @@ public class RegexParser {
         if (regex == null) {
             throw new NullPointerException("regex string can't be null");
         }
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         result.append("^");
         for (int i = 0; i < regex.length(); i++) {
             char ch = regex.charAt(i);
@@ -65,9 +66,9 @@ public class RegexParser {
         result.append("$");
         return result.toString();
     }
-
+    
     static public boolean containsWildcard(String regex) {
         return (regex.contains("?") || regex.contains("*"));
     }
-
+    
 }
