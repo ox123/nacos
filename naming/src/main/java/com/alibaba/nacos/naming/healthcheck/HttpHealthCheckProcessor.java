@@ -15,7 +15,7 @@
  */
 package com.alibaba.nacos.naming.healthcheck;
 
-import com.alibaba.nacos.api.naming.pojo.AbstractHealthChecker;
+import com.alibaba.nacos.api.naming.pojo.healthcheck.impl.Http;
 import com.alibaba.nacos.naming.core.Cluster;
 import com.alibaba.nacos.naming.core.Instance;
 import com.alibaba.nacos.naming.misc.SwitchDomain;
@@ -47,6 +47,8 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
 @Component
 public class HttpHealthCheckProcessor implements HealthCheckProcessor {
 
+    public static final String TYPE = "HTTP";
+
     @Autowired
     private SwitchDomain switchDomain;
 
@@ -55,7 +57,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
 
     private static AsyncHttpClient asyncHttpClient;
 
-    public static final int CONNECT_TIMEOUT_MS = 500;
+    private static final int CONNECT_TIMEOUT_MS = 500;
 
     static {
         try {
@@ -79,7 +81,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
 
     @Override
     public String getType() {
-        return "HTTP";
+        return TYPE;
     }
 
     @Override
@@ -113,7 +115,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
                     continue;
                 }
 
-                AbstractHealthChecker.Http healthChecker = (AbstractHealthChecker.Http) cluster.getHealthChecker();
+                Http healthChecker = (Http) cluster.getHealthChecker();
 
                 int ckPort = cluster.isUseIPPort4Check() ? ip.getPort() : cluster.getDefCkport();
                 URL host = new URL("http://" + ip.getIp() + ":" + ckPort);

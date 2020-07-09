@@ -15,24 +15,25 @@
  */
 package com.alibaba.nacos.naming.controllers;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
 import com.alibaba.nacos.api.common.Constants;
+import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.CommonParams;
-import com.alibaba.nacos.api.naming.pojo.AbstractHealthChecker;
+import com.alibaba.nacos.api.naming.pojo.healthcheck.AbstractHealthChecker;
+import com.alibaba.nacos.api.naming.pojo.healthcheck.HealthCheckerFactory;
+import com.alibaba.nacos.core.auth.ActionTypes;
+import com.alibaba.nacos.core.auth.Secured;
 import com.alibaba.nacos.core.utils.WebUtils;
 import com.alibaba.nacos.naming.core.Cluster;
 import com.alibaba.nacos.naming.core.Service;
 import com.alibaba.nacos.naming.core.ServiceManager;
-import com.alibaba.nacos.naming.exception.NacosException;
 import com.alibaba.nacos.naming.misc.Loggers;
 import com.alibaba.nacos.naming.misc.UtilsAndCommons;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
@@ -47,7 +48,8 @@ public class ClusterController {
     @Autowired
     protected ServiceManager serviceManager;
 
-    @RequestMapping(value = "", method = RequestMethod.PUT)
+    @PutMapping
+    @Secured(action = ActionTypes.WRITE)
     public String update(HttpServletRequest request) throws Exception {
 
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID,
@@ -67,33 +69,13 @@ public class ClusterController {
         Cluster cluster = service.getClusterMap().get(clusterName);
         if (cluster == null) {
             Loggers.SRV_LOG.warn("[UPDATE-CLUSTER] cluster not exist, will create it: {}, service: {}", clusterName, serviceName);
-            cluster = new Cluster();
-            cluster.setName(clusterName);
-            cluster.setService(service);
+            cluster = new Cluster(clusterName, service);
         }
 
         cluster.setDefCkport(NumberUtils.toInt(checkPort));
         cluster.setUseIPPort4Check(BooleanUtils.toBoolean(useInstancePort4Check));
 
-        JSONObject healthCheckObj = JSON.parseObject(healthChecker);
-        AbstractHealthChecker abstractHealthChecker;
-
-        switch (healthCheckObj.getString("type")) {
-            case AbstractHealthChecker.Tcp.TYPE:
-                abstractHealthChecker = JSON.parseObject(healthChecker, AbstractHealthChecker.Tcp.class);
-                break;
-            case AbstractHealthChecker.Http.TYPE:
-                abstractHealthChecker = JSON.parseObject(healthChecker, AbstractHealthChecker.Http.class);
-                break;
-            case AbstractHealthChecker.Mysql.TYPE:
-                abstractHealthChecker = JSON.parseObject(healthChecker, AbstractHealthChecker.Mysql.class);
-                break;
-            case AbstractHealthChecker.None.TYPE:
-                abstractHealthChecker = JSON.parseObject(healthChecker, AbstractHealthChecker.None.class);
-                break;
-            default:
-                throw new NacosException(NacosException.INVALID_PARAM, "unknown health check type:" + healthChecker);
-        }
+        AbstractHealthChecker abstractHealthChecker = HealthCheckerFactory.deserialize(healthChecker);
 
         cluster.setHealthChecker(abstractHealthChecker);
         cluster.setMetadata(UtilsAndCommons.parseMetadata(metadata));
@@ -107,4 +89,5 @@ public class ClusterController {
 
         return "ok";
     }
+
 }

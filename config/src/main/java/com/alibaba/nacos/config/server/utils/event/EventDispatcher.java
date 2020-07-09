@@ -42,7 +42,7 @@ public class EventDispatcher {
      */
     static public void fireEvent(Event event) {
         if (null == event) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("event is null");
         }
 
         for (AbstractEventListener listener : getEntry(event.getClass()).listeners) {
@@ -113,7 +113,7 @@ public class EventDispatcher {
 
     static final CopyOnWriteArrayList<Entry> LISTENER_HUB = new CopyOnWriteArrayList<Entry>();
 
-    static public interface Event {
+    public interface Event {
     }
 
     static public abstract class AbstractEventListener {

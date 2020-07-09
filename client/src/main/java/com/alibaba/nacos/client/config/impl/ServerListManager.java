@@ -16,11 +16,13 @@
 package com.alibaba.nacos.client.config.impl;
 
 import com.alibaba.nacos.api.PropertyKeyConst;
+import com.alibaba.nacos.api.SystemPropertyKeyConst;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.client.config.impl.EventDispatcher.ServerlistChangeEvent;
 import com.alibaba.nacos.client.config.impl.HttpSimpleClient.HttpResult;
-import com.alibaba.nacos.client.config.utils.IOUtils;
 import com.alibaba.nacos.client.utils.*;
+import com.alibaba.nacos.common.utils.IoUtils;
+import com.alibaba.nacos.common.utils.StringUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -30,6 +32,8 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
+
+
 /**
  * Serverlist Manager
  *
@@ -38,6 +42,8 @@ import java.util.concurrent.TimeUnit;
 public class ServerListManager {
 
     private static final Logger LOGGER = LogUtils.logger(ServerListManager.class);
+    private static final String HTTPS = "https://";
+    private static final String HTTP = "http://";
 
     public ServerListManager() {
         isFixed = false;
@@ -117,12 +123,16 @@ public class ServerListManager {
             isFixed = true;
             List<String> serverAddrs = new ArrayList<String>();
             String[] serverAddrsArr = serverAddrsStr.split(",");
-            for (String serverAddr : serverAddrsArr) {
-                String[] serverAddrArr = serverAddr.split(":");
-                if (serverAddrArr.length == 1) {
-                    serverAddrs.add(serverAddrArr[0] + ":" + ParamUtil.getDefaultServerPort());
-                } else {
+            for (String serverAddr: serverAddrsArr) {
+                if (serverAddr.startsWith(HTTPS) || serverAddr.startsWith(HTTP)) {
                     serverAddrs.add(serverAddr);
+                } else {
+                    String[] serverAddrArr = serverAddr.split(":");
+                    if (serverAddrArr.length == 1) {
+                        serverAddrs.add(HTTP + serverAddrArr[0] + ":" + ParamUtil.getDefaultServerPort());
+                    } else {
+                        serverAddrs.add(HTTP + serverAddr);
+                    }
                 }
             }
             serverUrls = serverAddrs;
@@ -151,6 +161,7 @@ public class ServerListManager {
                     contentPath, serverListName, namespace);
             }
         }
+
     }
 
     private void initParam(Properties properties) {
@@ -180,7 +191,13 @@ public class ServerListManager {
         }
 
         String endpointTmp = properties.getProperty(PropertyKeyConst.ENDPOINT);
-        if (Boolean.valueOf(properties.getProperty(PropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE, ParamUtil.USE_ENDPOINT_PARSING_RULE_DEFAULT_VALUE))) {
+
+        // Whether to enable domain name resolution rules
+        String isUseEndpointRuleParsing =
+            properties.getProperty(PropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
+                System.getProperty(SystemPropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
+                    String.valueOf(ParamUtil.USE_ENDPOINT_PARSING_RULE_DEFAULT_VALUE)));
+        if (Boolean.parseBoolean(isUseEndpointRuleParsing)) {
             String endpointUrl = ParamUtil.parsingEndpointRule(endpointTmp);
             if (StringUtils.isNotBlank(endpointUrl)) {
                 serverAddrsStr = "";
@@ -218,6 +235,10 @@ public class ServerListManager {
         isStarted = true;
     }
 
+    public List<String> getServerUrls() {
+        return serverUrls;
+    }
+
     Iterator<String> iterator() {
         if (serverUrls.isEmpty()) {
             LOGGER.error("[{}] [iterator-serverlist] No server address defined!", name);
@@ -251,14 +272,25 @@ public class ServerListManager {
             LOGGER.warn("[update-serverlist] current serverlist from address server is empty!!!");
             return;
         }
+
+        List<String> newServerAddrList = new ArrayList<String>();
+        for (String server : newList) {
+            if (server.startsWith(HTTP) || server.startsWith(HTTPS)) {
+                newServerAddrList.add(server);
+            } else {
+                newServerAddrList.add(HTTP + server);
+            }
+        }
+
         /**
          * no change
          */
-        if (newList.equals(serverUrls)) {
+        if (newServerAddrList.equals(serverUrls)) {
             return;
         }
-        serverUrls = new ArrayList<String>(newList);
-        currentServerAddr = iterator().next();
+        serverUrls = new ArrayList<String>(newServerAddrList);
+        iterator = iterator();
+        currentServerAddr = iterator.next();
 
         EventDispatcher.fireEvent(new ServerlistChangeEvent());
         LOGGER.info("[{}] [update-serverlist] serverlist updated to {}", name, serverUrls);
@@ -272,12 +304,10 @@ public class ServerListManager {
                 if (DEFAULT_NAME.equals(name)) {
                     EnvUtil.setSelfEnv(httpResult.headers);
                 }
-                List<String> lines = IOUtils.readLines(new StringReader(httpResult.content));
+                List<String> lines = IoUtils.readLines(new StringReader(httpResult.content));
                 List<String> result = new ArrayList<String>(lines.size());
                 for (String serverAddr : lines) {
-                    if (null == serverAddr || serverAddr.trim().isEmpty()) {
-                        continue;
-                    } else {
+                    if (StringUtils.isNotBlank(serverAddr)) {
                         String[] ipPort = serverAddr.trim().split(":");
                         String ip = ipPort[0].trim();
                         if (ipPort.length == 1) {
@@ -308,6 +338,7 @@ public class ServerListManager {
         String split = "";
         for (String serverIp : serverIps) {
             sb.append(split);
+            serverIp = serverIp.replaceAll("http(s)?://", "");
             sb.append(serverIp.replaceAll(":", "_"));
             split = "-";
         }
@@ -325,14 +356,24 @@ public class ServerListManager {
     }
 
     public void refreshCurrentServerAddr() {
-        currentServerAddr = iterator().next();
+        iterator = iterator();
+        currentServerAddr = iterator.next();
     }
 
     public String getCurrentServerAddr() {
         if (StringUtils.isBlank(currentServerAddr)) {
-            currentServerAddr = iterator().next();
+            iterator = iterator();
+            currentServerAddr = iterator.next();
         }
         return currentServerAddr;
+    }
+
+    public void updateCurrentServerAddr(String currentServerAddr) {
+        this.currentServerAddr = currentServerAddr;
+    }
+
+    public Iterator<String> getIterator() {
+        return iterator;
     }
 
     public String getContentPath() {
@@ -352,7 +393,7 @@ public class ServerListManager {
     }
 
     /**
-     * 不同环境的名称
+     * The name of the different environment
      */
     private String name;
     private String namespace = "";
@@ -362,7 +403,7 @@ public class ServerListManager {
     static public final String FIXED_NAME = "fixed";
     private int initServerlistRetryTimes = 5;
     /**
-     * 和其他server的连接超时和socket超时
+     * Connection timeout and socket timeout with other servers
      */
     static final int TIMEOUT = 5000;
 
@@ -376,15 +417,17 @@ public class ServerListManager {
 
     private volatile String currentServerAddr;
 
+    private Iterator<String> iterator;
     public String serverPort = ParamUtil.getDefaultServerPort();
 
     public String addressServerUrl;
 
     private String serverAddrsStr;
+
 }
 
 /**
- * 对地址列表排序，同机房优先。
+ * Sort the address list, with the same room priority.
  */
 class ServerAddressIterator implements Iterator<String> {
 
@@ -426,14 +469,17 @@ class ServerAddressIterator implements Iterator<String> {
         iter = sorted.iterator();
     }
 
+    @Override
     public boolean hasNext() {
         return iter.hasNext();
     }
 
+    @Override
     public String next() {
         return iter.next().serverIp;
     }
 
+    @Override
     public void remove() {
         throw new UnsupportedOperationException();
     }

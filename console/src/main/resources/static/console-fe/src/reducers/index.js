@@ -13,5 +13,9 @@
 
 import locale from './locale';
 import base from './base';
+import subscribers from './subscribers';
+import authority from './authority';
+import namespace from './namespace';
+import configuration from './configuration';
 
-export default { locale, base };
+export default { locale, base, subscribers, authority, namespace, configuration };

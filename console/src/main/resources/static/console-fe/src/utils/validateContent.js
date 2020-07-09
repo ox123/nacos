@@ -1,3 +1,5 @@
+import * as yamljs from 'yamljs';
+
 export default {
   /**
    * 检测json是否合法
@@ -35,24 +37,23 @@ export default {
   /**
    * 检测yaml是否合法
    */
-  //   validateYaml(str) {
-  //     try {
-  //       console.log('yaml: ', yaml, yaml.safeLoadAll(str));
-  //       return !!yaml.safeLoadAll(str);
-  //     } catch (e) {
-  //       console.log('e: ', e);
-  //       return false;
-  //     }
-  //   },
+  validateYaml(str) {
+    try {
+      return yamljs.parse(str);
+    } catch (e) {
+      return false;
+    }
+  },
 
   /**
    * 检测属性是否正确
    */
   validateProperties(str = '') {
-    const reg = /^[^=]+=[^=]+$/;
+    const reg = /^[^=]+=.+$/;
     return str
       .replace('\n\r', '\n')
       .split('\n')
+      .filter(_str => _str)
       .every(_str => reg.test(_str.trim()));
   },
 
@@ -66,6 +67,7 @@ export default {
       'text/html': this.validateXml,
       html: this.validateXml,
       properties: this.validateProperties,
+      yaml: this.validateYaml,
     };
 
     if (!validateObj[type]) {

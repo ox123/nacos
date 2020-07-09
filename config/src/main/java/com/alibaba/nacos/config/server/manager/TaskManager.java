@@ -55,12 +55,14 @@ public final class TaskManager implements TaskManagerMBean {
 
     class ProcessRunnable implements Runnable {
 
+        @Override
         public void run() {
             while (!TaskManager.this.closed.get()) {
                 try {
                     Thread.sleep(100);
                     TaskManager.this.process();
                 } catch (Throwable e) {
+                    LogUtil.dumpLog.error("execute dump process has error : {}", e);
                 }
             }
 
@@ -248,6 +250,7 @@ public final class TaskManager implements TaskManagerMBean {
         }
     }
 
+    @Override
     public String getTaskInfos() {
         StringBuilder sb = new StringBuilder();
         for (String taskType : this.taskProcessors.keySet()) {

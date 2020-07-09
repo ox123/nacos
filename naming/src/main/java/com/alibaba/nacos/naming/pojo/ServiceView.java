@@ -15,8 +15,6 @@
  */
 package com.alibaba.nacos.naming.pojo;
 
-import com.alibaba.fastjson.JSON;
-
 /**
  * @author nkorange
  */
@@ -27,6 +25,7 @@ public class ServiceView {
     private int clusterCount;
     private int ipCount;
     private int healthyInstanceCount;
+    private String triggerFlag;
 
     public String getName() {
         return name;
@@ -68,8 +67,23 @@ public class ServiceView {
         this.healthyInstanceCount = healthyInstanceCount;
     }
 
+    public String getTriggerFlag() {
+        return triggerFlag;
+    }
+
+    public void setTriggerFlag(String triggerFlag) {
+        this.triggerFlag = triggerFlag;
+    }
+
     @Override
     public String toString() {
-        return JSON.toJSONString(this);
+        return "ServiceView{" +
+            "name='" + name + '\'' +
+            ", groupName='" + groupName + '\'' +
+            ", clusterCount=" + clusterCount +
+            ", ipCount=" + ipCount +
+            ", healthyInstanceCount=" + healthyInstanceCount +
+            ", triggerFlag='" + triggerFlag + '\'' +
+            '}';
     }
 }

@@ -15,10 +15,10 @@
  */
 package com.alibaba.nacos.naming.healthcheck;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.nacos.naming.boot.RunningConfig;
-import com.alibaba.nacos.naming.cluster.ServerListManager;
-import com.alibaba.nacos.naming.cluster.servers.Server;
+import com.alibaba.nacos.common.utils.JacksonUtils;
+import com.alibaba.nacos.core.cluster.Member;
+import com.alibaba.nacos.core.cluster.ServerMemberManager;
+import com.alibaba.nacos.core.utils.ApplicationUtils;
 import com.alibaba.nacos.naming.core.Cluster;
 import com.alibaba.nacos.naming.core.DistroMapper;
 import com.alibaba.nacos.naming.core.Instance;
@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.HttpURLConnection;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +52,7 @@ public class HealthCheckCommon {
     private SwitchDomain switchDomain;
 
     @Autowired
-    private ServerListManager serverListManager;
+    private ServerMemberManager memberManager;
 
     @Autowired
     private PushService pushService;
@@ -76,30 +77,30 @@ public class HealthCheckCommon {
                 List list = Arrays.asList(healthCheckResults.toArray());
                 healthCheckResults.clear();
 
-                List<Server> sameSiteServers = serverListManager.getServers();
+                Collection<Member> sameSiteServers = memberManager.allMembers();
 
                 if (sameSiteServers == null || sameSiteServers.size() <= 0) {
                     return;
                 }
 
-                for (Server server : sameSiteServers) {
-                    if (server.getKey().equals(NetUtils.localServer())) {
+                for (Member server : sameSiteServers) {
+                    if (server.getAddress().equals(NetUtils.localServer())) {
                         continue;
                     }
                     Map<String, String> params = new HashMap<>(10);
-                    params.put("result", JSON.toJSONString(list));
-                    if (Loggers.DEBUG_LOG.isDebugEnabled()) {
-                        Loggers.DEBUG_LOG.debug("[HEALTH-SYNC] server: {}, healthCheckResults: {}",
-                            server, JSON.toJSONString(list));
+                    params.put("result", JacksonUtils.toJson(list));
+                    if (Loggers.SRV_LOG.isDebugEnabled()) {
+                        Loggers.SRV_LOG.debug("[HEALTH-SYNC] server: {}, healthCheckResults: {}",
+                            server, JacksonUtils.toJson(list));
                     }
 
-                    HttpClient.HttpResult httpResult = HttpClient.httpPost("http://" + server.getKey()
-                        + RunningConfig.getContextPath() + UtilsAndCommons.NACOS_NAMING_CONTEXT
+                    HttpClient.HttpResult httpResult = HttpClient.httpPost("http://" + server.getAddress()
+                        + ApplicationUtils.getContextPath() + UtilsAndCommons.NACOS_NAMING_CONTEXT
                         + "/api/healthCheckResult", null, params);
 
                     if (httpResult.code != HttpURLConnection.HTTP_OK) {
                         Loggers.EVT_LOG.warn("[HEALTH-CHECK-SYNC] failed to send result to {}, result: {}",
-                            server, JSON.toJSONString(list));
+                            server, JacksonUtils.toJson(list));
                     }
 
                 }
@@ -142,11 +143,10 @@ public class HealthCheckCommon {
                         ip.setHealthy(true);
                         ip.setMockValid(true);
 
-                        Service vDom = cluster.getService();
-                        vDom.setLastModifiedMillis(System.currentTimeMillis());
-
-                        pushService.serviceChanged(vDom.getNamespaceId(), vDom.getName());
-                        addResult(new HealthCheckResult(vDom.getName(), ip));
+                        Service service = cluster.getService();
+                        service.setLastModifiedMillis(System.currentTimeMillis());
+                        pushService.serviceChanged(service);
+                        addResult(new HealthCheckResult(service.getName(), ip));
 
                         Loggers.EVT_LOG.info("serviceName: {} {POS} {IP-ENABLED} valid: {}:{}@{}, region: {}, msg: {}",
                             cluster.getService().getName(), ip.getIp(), ip.getPort(), cluster.getName(), UtilsAndCommons.LOCALHOST_SITE, msg);
@@ -180,11 +180,11 @@ public class HealthCheckCommon {
                         ip.setHealthy(false);
                         ip.setMockValid(false);
 
-                        Service vDom = cluster.getService();
-                        vDom.setLastModifiedMillis(System.currentTimeMillis());
-                        addResult(new HealthCheckResult(vDom.getName(), ip));
+                        Service service = cluster.getService();
+                        service.setLastModifiedMillis(System.currentTimeMillis());
+                        addResult(new HealthCheckResult(service.getName(), ip));
 
-                        pushService.serviceChanged(vDom.getNamespaceId(), vDom.getName());
+                        pushService.serviceChanged(service);
 
                         Loggers.EVT_LOG.info("serviceName: {} {POS} {IP-DISABLED} invalid: {}:{}@{}, region: {}, msg: {}",
                             cluster.getService().getName(), ip.getIp(), ip.getPort(), cluster.getName(), UtilsAndCommons.LOCALHOST_SITE, msg);
@@ -215,11 +215,11 @@ public class HealthCheckCommon {
                     ip.setHealthy(false);
                     ip.setMockValid(false);
 
-                    Service vDom = cluster.getService();
-                    vDom.setLastModifiedMillis(System.currentTimeMillis());
+                    Service service = cluster.getService();
+                    service.setLastModifiedMillis(System.currentTimeMillis());
 
-                    pushService.serviceChanged(vDom.getNamespaceId(), vDom.getName());
-                    addResult(new HealthCheckResult(vDom.getName(), ip));
+                    pushService.serviceChanged(service);
+                    addResult(new HealthCheckResult(service.getName(), ip));
 
                     Loggers.EVT_LOG.info("serviceName: {} {POS} {IP-DISABLED} invalid-now: {}:{}@{}, region: {}, msg: {}",
                         cluster.getService().getName(), ip.getIp(), ip.getPort(), cluster.getName(), UtilsAndCommons.LOCALHOST_SITE, msg);

@@ -15,8 +15,6 @@
  */
 package com.alibaba.nacos.client.naming.beat;
 
-import com.alibaba.fastjson.JSON;
-
 import java.util.Map;
 
 /**
@@ -31,10 +29,22 @@ public class BeatInfo {
     private String cluster;
     private Map<String, String> metadata;
     private volatile boolean scheduled;
+    private volatile long period;
+    private volatile boolean stopped;
 
     @Override
     public String toString() {
-        return JSON.toJSONString(this);
+        return "BeatInfo{" +
+            "port=" + port +
+            ", ip='" + ip + '\'' +
+            ", weight=" + weight +
+            ", serviceName='" + serviceName + '\'' +
+            ", cluster='" + cluster + '\'' +
+            ", metadata=" + metadata +
+            ", scheduled=" + scheduled +
+            ", period=" + period +
+            ", stopped=" + stopped +
+            '}';
     }
 
     public String getServiceName() {
@@ -91,5 +101,21 @@ public class BeatInfo {
 
     public void setScheduled(boolean scheduled) {
         this.scheduled = scheduled;
+    }
+
+    public long getPeriod() {
+        return period;
+    }
+
+    public void setPeriod(long period) {
+        this.period = period;
+    }
+
+    public boolean isStopped() {
+        return stopped;
+    }
+
+    public void setStopped(boolean stopped) {
+        this.stopped = stopped;
     }
 }

@@ -15,7 +15,7 @@
  */
 package com.alibaba.nacos.naming.healthcheck;
 
-import com.alibaba.nacos.api.naming.pojo.AbstractHealthChecker;
+import com.alibaba.nacos.api.naming.pojo.healthcheck.impl.Mysql;
 import com.alibaba.nacos.naming.core.Cluster;
 import com.alibaba.nacos.naming.core.Instance;
 import com.alibaba.nacos.naming.misc.Loggers;
@@ -44,6 +44,8 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
  */
 @Component
 public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
+
+    public static final String TYPE = "MYSQL";
 
     @Autowired
     private HealthCheckCommon healthCheckCommon;
@@ -83,7 +85,7 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
 
     @Override
     public String getType() {
-        return "MYSQL";
+        return TYPE;
     }
 
     @Override
@@ -144,7 +146,7 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
                 Cluster cluster = task.getCluster();
                 String key = cluster.getService().getName() + ":" + cluster.getName() + ":" + ip.getIp() + ":" + ip.getPort();
                 Connection connection = CONNECTION_POOL.get(key);
-                AbstractHealthChecker.Mysql config = (AbstractHealthChecker.Mysql) cluster.getHealthChecker();
+                Mysql config = (Mysql) cluster.getHealthChecker();
 
                 if (connection == null || connection.isClosed()) {
                     MysqlDataSource dataSource = new MysqlDataSource();

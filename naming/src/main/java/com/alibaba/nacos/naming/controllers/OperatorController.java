@@ -15,33 +15,32 @@
  */
 package com.alibaba.nacos.naming.controllers;
 
-import com.alibaba.fastjson.JSONArray;
-import com.alibaba.fastjson.JSONObject;
 import com.alibaba.nacos.api.common.Constants;
-import com.alibaba.nacos.api.naming.CommonParams;
-import com.alibaba.nacos.core.utils.SystemUtils;
-import com.alibaba.nacos.core.utils.WebUtils;
+import com.alibaba.nacos.common.utils.JacksonUtils;
+import com.alibaba.nacos.core.auth.ActionTypes;
+import com.alibaba.nacos.core.auth.Secured;
+import com.alibaba.nacos.core.cluster.Member;
+import com.alibaba.nacos.core.cluster.NodeState;
+import com.alibaba.nacos.core.cluster.ServerMemberManager;
+import com.alibaba.nacos.core.utils.ApplicationUtils;
 import com.alibaba.nacos.naming.cluster.ServerListManager;
 import com.alibaba.nacos.naming.cluster.ServerStatusManager;
 import com.alibaba.nacos.naming.consistency.persistent.raft.RaftCore;
 import com.alibaba.nacos.naming.core.DistroMapper;
 import com.alibaba.nacos.naming.core.Service;
 import com.alibaba.nacos.naming.core.ServiceManager;
-import com.alibaba.nacos.naming.misc.SwitchDomain;
-import com.alibaba.nacos.naming.misc.SwitchEntry;
-import com.alibaba.nacos.naming.misc.SwitchManager;
-import com.alibaba.nacos.naming.misc.UtilsAndCommons;
+import com.alibaba.nacos.naming.misc.*;
 import com.alibaba.nacos.naming.push.PushService;
-import com.alibaba.nacos.naming.web.NeedAuth;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -50,40 +49,38 @@ import java.util.List;
  * @author nkorange
  */
 @RestController
-@RequestMapping(UtilsAndCommons.NACOS_NAMING_CONTEXT + "/operator")
+@RequestMapping({UtilsAndCommons.NACOS_NAMING_CONTEXT + "/operator", UtilsAndCommons.NACOS_NAMING_CONTEXT + "/ops"})
 public class OperatorController {
 
-    @Autowired
-    private PushService pushService;
+    private final PushService pushService;
+    private final SwitchManager switchManager;
+    private final ServerListManager serverListManager;
+    private final ServiceManager serviceManager;
+    private final ServerMemberManager memberManager;
+    private final ServerStatusManager serverStatusManager;
+    private final SwitchDomain switchDomain;
+    private final DistroMapper distroMapper;
+    private final RaftCore raftCore;
 
-    @Autowired
-    private SwitchManager switchManager;
-
-    @Autowired
-    private ServiceManager serviceManager;
-
-    @Autowired
-    private ServerListManager serverListManager;
-
-    @Autowired
-    private ServerStatusManager serverStatusManager;
-
-    @Autowired
-    private SwitchDomain switchDomain;
-
-    @Autowired
-    private DistroMapper distroMapper;
-
-    @Autowired
-    private RaftCore raftCore;
+    public OperatorController(PushService pushService, SwitchManager switchManager,
+            ServerListManager serverListManager, ServiceManager serviceManager, ServerMemberManager memberManager,
+            ServerStatusManager serverStatusManager, SwitchDomain switchDomain,
+            DistroMapper distroMapper, RaftCore raftCore) {
+        this.pushService = pushService;
+        this.switchManager = switchManager;
+        this.serverListManager = serverListManager;
+        this.serviceManager = serviceManager;
+        this.memberManager = memberManager;
+        this.serverStatusManager = serverStatusManager;
+        this.switchDomain = switchDomain;
+        this.distroMapper = distroMapper;
+        this.raftCore = raftCore;
+    }
 
     @RequestMapping("/push/state")
-    public JSONObject pushState(HttpServletRequest request) {
+    public ObjectNode pushState(@RequestParam(required = false) boolean detail, @RequestParam(required = false) boolean reset) {
 
-        JSONObject result = new JSONObject();
-
-        boolean detail = Boolean.parseBoolean(WebUtils.optional(request, "detail", "false"));
-        boolean reset = Boolean.parseBoolean(WebUtils.optional(request, "reset", "false"));
+        ObjectNode result = JacksonUtils.createEmptyJsonNode();
 
         List<PushService.Receiver.AckEntry> failedPushes = PushService.getFailedPushes();
         int failedPushCount = pushService.getFailedPushCount();
@@ -96,7 +93,7 @@ public class OperatorController {
             result.put("ratio", 0);
         }
 
-        JSONArray dataArray = new JSONArray();
+        ArrayNode dataArray = JacksonUtils.createEmptyArrayNode();
         if (detail) {
             for (PushService.Receiver.AckEntry entry : failedPushes) {
                 try {
@@ -105,7 +102,7 @@ public class OperatorController {
                     dataArray.add("[encoding failure]");
                 }
             }
-            result.put("data", dataArray);
+            result.replace("data", dataArray);
         }
 
         if (reset) {
@@ -117,27 +114,26 @@ public class OperatorController {
         return result;
     }
 
-    @RequestMapping(value = "/switches", method = RequestMethod.GET)
+    @GetMapping("/switches")
     public SwitchDomain switches(HttpServletRequest request) {
         return switchDomain;
     }
 
-    @NeedAuth
-    @RequestMapping(value = "/switches", method = RequestMethod.PUT)
-    public String updateSwitch(HttpServletRequest request) throws Exception {
-        Boolean debug = Boolean.parseBoolean(WebUtils.optional(request, "debug", "false"));
-        String entry = WebUtils.required(request, "entry");
-        String value = WebUtils.required(request, "value");
+    @Secured(resource = "naming/switches", action = ActionTypes.WRITE)
+    @PutMapping("/switches")
+    public String updateSwitch(@RequestParam(required = false) boolean debug,
+                               @RequestParam String entry, @RequestParam String value) throws Exception {
 
         switchManager.update(entry, value, debug);
 
         return "ok";
     }
 
-    @RequestMapping(value = "/metrics", method = RequestMethod.GET)
-    public JSONObject metrics(HttpServletRequest request) {
+    @Secured(resource = "naming/metrics", action = ActionTypes.READ)
+    @GetMapping("/metrics")
+    public ObjectNode metrics(HttpServletRequest request) {
 
-        JSONObject result = new JSONObject();
+        ObjectNode result = JacksonUtils.createEmptyJsonNode();
 
         int serviceCount = serviceManager.getServiceCount();
         int ipCount = serviceManager.getInstanceCount();
@@ -151,68 +147,88 @@ public class OperatorController {
         result.put("raftNotifyTaskCount", raftCore.getNotifyTaskCount());
         result.put("responsibleServiceCount", responsibleDomCount);
         result.put("responsibleInstanceCount", responsibleIPCount);
-        result.put("cpu", SystemUtils.getCPU());
-        result.put("load", SystemUtils.getLoad());
-        result.put("mem", SystemUtils.getMem());
+        result.put("cpu", ApplicationUtils.getCPU());
+        result.put("load", ApplicationUtils.getLoad());
+        result.put("mem", ApplicationUtils.getMem());
 
         return result;
     }
 
-    @RequestMapping(value = "/distro/server", method = RequestMethod.GET)
-    public JSONObject getResponsibleServer4Service(HttpServletRequest request) {
-        String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID,
-            Constants.DEFAULT_NAMESPACE_ID);
-        String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
+    @GetMapping("/distro/server")
+    public ObjectNode getResponsibleServer4Service(@RequestParam(defaultValue = Constants.DEFAULT_NAMESPACE_ID) String namespaceId,
+                                                   @RequestParam String serviceName) {
+
         Service service = serviceManager.getService(namespaceId, serviceName);
 
         if (service == null) {
             throw new IllegalArgumentException("service not found");
         }
 
-        JSONObject result = new JSONObject();
+        ObjectNode result = JacksonUtils.createEmptyJsonNode();
 
         result.put("responsibleServer", distroMapper.mapSrv(serviceName));
 
         return result;
     }
 
-    @RequestMapping(value = "/distro/status", method = RequestMethod.GET)
-    public JSONObject distroStatus(HttpServletRequest request) {
+    @GetMapping("/distro/status")
+    public ObjectNode distroStatus(@RequestParam(defaultValue = "view") String action) {
 
-        JSONObject result = new JSONObject();
-        String action = WebUtils.optional(request, "action", "view");
+        ObjectNode result = JacksonUtils.createEmptyJsonNode();
 
         if (StringUtils.equals(SwitchEntry.ACTION_VIEW, action)) {
-            result.put("status", serverListManager.getDistroConfig());
-            return result;
-        }
-
-        if (StringUtils.equals(SwitchEntry.ACTION_CLEAN, action)) {
-            serverListManager.clean();
+            result.replace("status", JacksonUtils.transferToJsonNode(memberManager.allMembers()));
             return result;
         }
 
         return result;
     }
 
-    @RequestMapping(value = "/servers", method = RequestMethod.GET)
-    public JSONObject getHealthyServerList(HttpServletRequest request) {
+    @GetMapping("/servers")
+    public ObjectNode getHealthyServerList(@RequestParam(required = false) boolean healthy) {
 
-        boolean healthy = Boolean.parseBoolean(WebUtils.optional(request, "healthy", "false"));
-        JSONObject result = new JSONObject();
+        ObjectNode result = JacksonUtils.createEmptyJsonNode();
         if (healthy) {
-            result.put("servers", serverListManager.getHealthyServers());
+            List<Member> healthyMember = memberManager.allMembers().stream()
+                .filter(member -> member.getState() == NodeState.UP).collect(ArrayList::new,
+                    ArrayList::add, ArrayList::addAll);
+            result.replace("servers", JacksonUtils.transferToJsonNode(healthyMember));
         } else {
-            result.put("servers", serverListManager.getServers());
+            result.replace("servers", JacksonUtils.transferToJsonNode(memberManager.allMembers()));
         }
 
         return result;
     }
 
+    /**
+     * This interface will be removed in a future release
+     *
+     * @deprecated 1.3.0 This function will be deleted sometime after version 1.3.0
+     * @param serverStatus server status
+     * @return "ok"
+     */
+    @Deprecated
     @RequestMapping("/server/status")
-    public String serverStatus(HttpServletRequest request) {
-        String serverStatus = WebUtils.required(request, "serverStatus");
+    public String serverStatus(@RequestParam String serverStatus) {
         serverListManager.onReceiveServerStatus(serverStatus);
         return "ok";
+    }
+
+    @PutMapping("/log")
+    public String setLogLevel(@RequestParam String logName, @RequestParam String logLevel) {
+        Loggers.setLogLevel(logName, logLevel);
+        return "ok";
+    }
+
+    /**
+     * This interface will be removed in a future release
+     *
+     * @deprecated 1.3.0 This function will be deleted sometime after version 1.3.0
+     * @return {@link JsonNode}
+     */
+    @Deprecated
+    @RequestMapping(value = "/cluster/state", method = RequestMethod.GET)
+    public JsonNode getClusterStates() {
+        return JacksonUtils.transferToJsonNode(serviceManager.getMySelfClusterState());
     }
 }

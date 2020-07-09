@@ -25,6 +25,7 @@ import com.alibaba.nacos.naming.misc.Loggers;
 import com.alibaba.nacos.naming.misc.SwitchDomain;
 import com.alibaba.nacos.naming.pojo.Record;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
  * @author nkorange
  * @since 1.0.0
  */
+@DependsOn("ProtocolManager")
 @Service
 public class RaftConsistencyServiceImpl implements PersistentConsistencyService {
 
@@ -51,7 +53,7 @@ public class RaftConsistencyServiceImpl implements PersistentConsistencyService 
             raftCore.signalPublish(key, value);
         } catch (Exception e) {
             Loggers.RAFT.error("Raft put failed.", e);
-            throw new NacosException(NacosException.SERVER_ERROR, "Raft put failed, key:" + key + ", value:" + value);
+            throw new NacosException(NacosException.SERVER_ERROR, "Raft put failed, key:" + key + ", value:" + value, e);
         }
     }
 
@@ -69,7 +71,7 @@ public class RaftConsistencyServiceImpl implements PersistentConsistencyService 
             raftCore.unlistenAll(key);
         } catch (Exception e) {
             Loggers.RAFT.error("Raft remove failed.", e);
-            throw new NacosException(NacosException.SERVER_ERROR, "Raft remove failed, key:" + key);
+            throw new NacosException(NacosException.SERVER_ERROR, "Raft remove failed, key:" + key, e);
         }
     }
 
@@ -98,7 +100,7 @@ public class RaftConsistencyServiceImpl implements PersistentConsistencyService 
             raftCore.onPublish(datum, source);
         } catch (Exception e) {
             Loggers.RAFT.error("Raft onPut failed.", e);
-            throw new NacosException(NacosException.SERVER_ERROR, "Raft onPut failed, datum:" + datum + ", source: " + source);
+            throw new NacosException(NacosException.SERVER_ERROR, "Raft onPut failed, datum:" + datum + ", source: " + source, e);
         }
     }
 
@@ -107,7 +109,7 @@ public class RaftConsistencyServiceImpl implements PersistentConsistencyService 
             raftCore.onDelete(datum.key, source);
         } catch (Exception e) {
             Loggers.RAFT.error("Raft onRemove failed.", e);
-            throw new NacosException(NacosException.SERVER_ERROR, "Raft onRemove failed, datum:" + datum + ", source: " + source);
+            throw new NacosException(NacosException.SERVER_ERROR, "Raft onRemove failed, datum:" + datum + ", source: " + source, e);
         }
     }
 }

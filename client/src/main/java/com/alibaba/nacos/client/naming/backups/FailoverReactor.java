@@ -15,14 +15,15 @@
  */
 package com.alibaba.nacos.client.naming.backups;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.nacos.api.naming.pojo.ServiceInfo;
 import com.alibaba.nacos.client.naming.cache.ConcurrentDiskUtil;
 import com.alibaba.nacos.client.naming.cache.DiskCache;
 import com.alibaba.nacos.client.naming.core.HostReactor;
 import com.alibaba.nacos.client.naming.utils.CollectionUtils;
-import com.alibaba.nacos.client.naming.utils.StringUtils;
 import com.alibaba.nacos.client.naming.utils.UtilAndComs;
+import com.alibaba.nacos.common.utils.JacksonUtils;
+
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -118,7 +119,7 @@ public class FailoverReactor {
                     String failover = ConcurrentDiskUtil.getFileContent(failoverDir + UtilAndComs.FAILOVER_SWITCH,
                         Charset.defaultCharset().toString());
                     if (!StringUtils.isEmpty(failover)) {
-                        List<String> lines = Arrays.asList(failover.split(DiskCache.getLineSeperator()));
+                        List<String> lines = Arrays.asList(failover.split(DiskCache.getLineSeparator()));
 
                         for (String line : lines) {
                             String line1 = line.trim();
@@ -180,7 +181,7 @@ public class FailoverReactor {
                         String json;
                         if ((json = reader.readLine()) != null) {
                             try {
-                                dom = JSON.parseObject(json, ServiceInfo.class);
+                                dom = JacksonUtils.toObj(json, ServiceInfo.class);
                             } catch (Exception e) {
                                 NAMING_LOGGER.error("[NA] error while parsing cached dom : " + json, e);
                             }
@@ -212,6 +213,7 @@ public class FailoverReactor {
     }
 
     class DiskFileWriter extends TimerTask {
+        @Override
         public void run() {
             Map<String, ServiceInfo> map = hostReactor.getServiceInfoMap();
             for (Map.Entry<String, ServiceInfo> entry : map.entrySet()) {

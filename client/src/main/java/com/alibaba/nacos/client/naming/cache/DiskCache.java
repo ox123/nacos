@@ -15,12 +15,13 @@
  */
 package com.alibaba.nacos.client.naming.cache;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.nacos.api.common.Constants;
 import com.alibaba.nacos.api.naming.pojo.Instance;
 import com.alibaba.nacos.api.naming.pojo.ServiceInfo;
 import com.alibaba.nacos.client.naming.utils.CollectionUtils;
-import com.alibaba.nacos.client.naming.utils.StringUtils;
+import com.alibaba.nacos.common.utils.JacksonUtils;
+
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -58,7 +59,7 @@ public class DiskCache {
             String json = dom.getJsonFromServer();
 
             if (StringUtils.isEmpty(json)) {
-                json = JSON.toJSONString(dom);
+                json = JacksonUtils.toJson(dom);
             }
 
             keyContentBuffer.append(json);
@@ -71,9 +72,8 @@ public class DiskCache {
         }
     }
 
-    public static String getLineSeperator() {
-        String lineSeparator = System.getProperty("line.separator");
-        return lineSeparator;
+    public static String getLineSeparator() {
+        return System.getProperty("line.separator");
     }
 
     public static Map<String, ServiceInfo> read(String cacheDir) {
@@ -82,7 +82,7 @@ public class DiskCache {
         BufferedReader reader = null;
         try {
             File[] files = makeSureCacheDirExists(cacheDir).listFiles();
-            if (files == null) {
+            if (files == null || files.length == 0) {
                 return domMap;
             }
 
@@ -113,10 +113,10 @@ public class DiskCache {
                                     continue;
                                 }
 
-                                newFormat = JSON.parseObject(json, ServiceInfo.class);
+                                newFormat = JacksonUtils.toObj(json, ServiceInfo.class);
 
                                 if (StringUtils.isEmpty(newFormat.getName())) {
-                                    ips.add(JSON.parseObject(json, Instance.class));
+                                    ips.add(JacksonUtils.toObj(json, Instance.class));
                                 }
                             } catch (Throwable e) {
                                 NAMING_LOGGER.error("[NA] error while parsing cache file: " + json, e);
@@ -151,10 +151,12 @@ public class DiskCache {
 
     private static File makeSureCacheDirExists(String dir) {
         File cacheDir = new File(dir);
-        if (!cacheDir.exists() && !cacheDir.mkdirs()) {
-            throw new IllegalStateException("failed to create cache dir: " + dir);
-        }
 
+        if (!cacheDir.exists()) {
+            if (!cacheDir.mkdirs() && !cacheDir.exists()) {
+                throw new IllegalStateException("failed to create cache dir: " + dir);
+            }
+        }
         return cacheDir;
     }
 }

@@ -17,7 +17,6 @@ import { request } from '../../../globalLib';
 import { Dialog, Form, Input, Switch, Message, ConfigProvider } from '@alifd/next';
 import { DIALOG_FORM_LAYOUT, METADATA_ENTER, METADATA_SEPARATOR } from './constant';
 import MonacoEditor from 'components/MonacoEditor';
-import { replaceEnter, processMetaData } from 'utils/nacosutil';
 
 @ConfigProvider.config
 class EditInstanceDialog extends React.Component {
@@ -26,6 +25,7 @@ class EditInstanceDialog extends React.Component {
   static propTypes = {
     serviceName: PropTypes.string,
     clusterName: PropTypes.string,
+    groupName: PropTypes.string,
     openLoading: PropTypes.string,
     closeLoading: PropTypes.string,
     getInstanceList: PropTypes.func,
@@ -45,7 +45,7 @@ class EditInstanceDialog extends React.Component {
     let editInstance = _editInstance;
     const { metadata = {} } = editInstance;
     if (Object.keys(metadata).length) {
-      editInstance.metadataText = processMetaData(METADATA_ENTER)(metadata);
+      editInstance.metadataText = JSON.stringify(metadata, null, '\t');
     }
     this.setState({ editInstance, editInstanceDialogVisible: true });
   }
@@ -55,7 +55,14 @@ class EditInstanceDialog extends React.Component {
   }
 
   onConfirm() {
-    const { serviceName, clusterName, getInstanceList, openLoading, closeLoading } = this.props;
+    const {
+      serviceName,
+      clusterName,
+      groupName,
+      getInstanceList,
+      openLoading,
+      closeLoading,
+    } = this.props;
     const { ip, port, ephemeral, weight, enabled, metadataText } = this.state.editInstance;
     request({
       method: 'PUT',
@@ -63,12 +70,13 @@ class EditInstanceDialog extends React.Component {
       data: {
         serviceName,
         clusterName,
+        groupName,
         ip,
         port,
         ephemeral,
         weight,
-        enable: enabled,
-        metadata: replaceEnter(METADATA_SEPARATOR)(metadataText),
+        enabled,
+        metadata: metadataText,
       },
       dataType: 'text',
       beforeSend: () => openLoading(),
@@ -127,7 +135,7 @@ class EditInstanceDialog extends React.Component {
           </Form.Item>
           <Form.Item label={`${locale.metadata}:`}>
             <MonacoEditor
-              language={'properties'}
+              language="json"
               width={'100%'}
               height={200}
               value={editInstance.metadataText}

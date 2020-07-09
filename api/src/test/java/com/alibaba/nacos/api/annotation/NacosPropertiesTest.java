@@ -74,4 +74,9 @@ public class NacosPropertiesTest {
         String resolvedValue = environment.resolvePlaceholders(placeholder);
         Assert.assertEquals(expectValue, resolvedValue);
     }
+
+    @Test
+    public void testSort() {
+
+    }
 }

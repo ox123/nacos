@@ -16,6 +16,7 @@
 package com.alibaba.nacos.config.server.service;
 
 import com.alibaba.nacos.config.server.model.SampleResult;
+import com.alibaba.nacos.config.server.model.event.LocalDataChangeEvent;
 import com.alibaba.nacos.config.server.monitor.MetricsMonitor;
 import com.alibaba.nacos.config.server.utils.GroupKey;
 import com.alibaba.nacos.config.server.utils.LogUtil;
@@ -302,7 +303,7 @@ public class LongPollingService extends AbstractEventListener {
         @Override
         public void run() {
             try {
-                ConfigService.getContentBetaMd5(groupKey);
+                ConfigCacheService.getContentBetaMd5(groupKey);
                 for (Iterator<ClientLongPolling> iter = allSubs.iterator(); iter.hasNext(); ) {
                     ClientLongPolling clientSub = iter.next();
                     if (clientSub.clientMd5Map.containsKey(groupKey)) {
@@ -371,6 +372,7 @@ public class LongPollingService extends AbstractEventListener {
         @Override
         public void run() {
             asyncTimeoutFuture = scheduler.schedule(new Runnable() {
+                @Override
                 public void run() {
                     try {
                         getRetainIps().put(ClientLongPolling.this.ip, System.currentTimeMillis());
@@ -406,6 +408,7 @@ public class LongPollingService extends AbstractEventListener {
                     }
 
                 }
+
             }, timeoutTime, TimeUnit.MILLISECONDS);
 
             allSubs.add(this);

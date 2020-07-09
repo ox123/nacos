@@ -15,31 +15,31 @@
  */
 package com.alibaba.nacos.naming.core;
 
+import com.alibaba.nacos.naming.BaseTest;
 import com.alibaba.nacos.naming.misc.UtilsAndCommons;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * @author nkorange
  */
-public class DomainTest {
+public class DomainTest extends BaseTest {
 
     private Service service;
 
     @Before
     public void before() {
+        super.before();
         service = new Service();
         service.setName("nacos.service.1");
-        Cluster cluster = new Cluster();
-        cluster.setName(UtilsAndCommons.DEFAULT_CLUSTER_NAME);
-        cluster.setService(service);
+        Cluster cluster = new Cluster(UtilsAndCommons.DEFAULT_CLUSTER_NAME, service);
         service.addCluster(cluster);
+        mockInjectPushServer();
     }
 
     @Test
@@ -48,9 +48,7 @@ public class DomainTest {
         Service newDomain = new Service();
         newDomain.setName("nacos.service.1");
         newDomain.setProtectThreshold(0.7f);
-        Cluster cluster = new Cluster();
-        cluster.setName(UtilsAndCommons.DEFAULT_CLUSTER_NAME);
-        cluster.setService(newDomain);
+        Cluster cluster = new Cluster(UtilsAndCommons.DEFAULT_CLUSTER_NAME, newDomain);
         newDomain.addCluster(cluster);
 
         service.update(newDomain);
@@ -60,8 +58,7 @@ public class DomainTest {
 
     @Test
     public void addCluster() {
-        Cluster cluster = new Cluster();
-        cluster.setName("nacos-cluster-1");
+        Cluster cluster = new Cluster("nacos-cluster-1", service);
 
         service.addCluster(cluster);
 

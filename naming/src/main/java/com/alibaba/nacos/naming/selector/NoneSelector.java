@@ -15,9 +15,11 @@
  */
 package com.alibaba.nacos.naming.selector;
 
-import com.alibaba.nacos.api.selector.AbstractSelector;
 import com.alibaba.nacos.api.selector.SelectorType;
+import com.alibaba.nacos.common.utils.JacksonUtils;
 import com.alibaba.nacos.naming.core.Instance;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonTypeInfo.Id;
 
 import java.util.List;
 
@@ -27,10 +29,11 @@ import java.util.List;
  * @author nkorange
  * @since 0.7.0
  */
-public class NoneSelector extends AbstractSelector implements Selector {
+@JsonTypeInfo(use = Id.NAME, property = "type")
+public class NoneSelector extends com.alibaba.nacos.api.selector.NoneSelector implements Selector {
 
-    public NoneSelector() {
-        this.setType(SelectorType.none.name());
+    static {
+        JacksonUtils.registerSubtype(NoneSelector.class, SelectorType.none.name());
     }
 
     @Override

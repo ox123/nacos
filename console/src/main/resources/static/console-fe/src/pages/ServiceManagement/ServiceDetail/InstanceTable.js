@@ -26,6 +26,7 @@ class InstanceTable extends React.Component {
     locale: PropTypes.object,
     clusterName: PropTypes.string,
     serviceName: PropTypes.string,
+    groupName: PropTypes.string,
   };
 
   constructor(props) {
@@ -52,7 +53,7 @@ class InstanceTable extends React.Component {
   }
 
   getInstanceList() {
-    const { clusterName, serviceName } = this.props;
+    const { clusterName, serviceName, groupName } = this.props;
     if (!clusterName) return;
     const { pageSize, pageNum } = this.state;
     request({
@@ -60,6 +61,7 @@ class InstanceTable extends React.Component {
       data: {
         serviceName,
         clusterName,
+        groupName,
         pageSize,
         pageNo: pageNum,
       },
@@ -76,18 +78,19 @@ class InstanceTable extends React.Component {
   switchState(index, record) {
     const { instance } = this.state;
     const { ip, port, ephemeral, weight, enabled, metadata } = record;
-    const { clusterName, serviceName } = this.props;
+    const { clusterName, serviceName, groupName } = this.props;
     request({
       method: 'PUT',
       url: 'v1/ns/instance',
       data: {
         serviceName,
         clusterName,
+        groupName,
         ip,
         port,
         ephemeral,
         weight,
-        enable: !enabled,
+        enabled: !enabled,
         metadata: JSON.stringify(metadata),
       },
       dataType: 'text',
@@ -110,7 +113,7 @@ class InstanceTable extends React.Component {
 
   render() {
     const { locale = {} } = this.props;
-    const { clusterName, serviceName } = this.props;
+    const { clusterName, serviceName, groupName } = this.props;
     const { instance, pageSize, loading } = this.state;
     return instance.count ? (
       <div>
@@ -176,6 +179,7 @@ class InstanceTable extends React.Component {
           ref={this.editInstanceDialog}
           serviceName={serviceName}
           clusterName={clusterName}
+          groupName={groupName}
           openLoading={() => this.openLoading()}
           closeLoading={() => this.closeLoading()}
           getInstanceList={() => this.getInstanceList()}
