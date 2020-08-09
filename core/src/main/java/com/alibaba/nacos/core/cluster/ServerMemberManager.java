@@ -19,19 +19,19 @@ package com.alibaba.nacos.core.cluster;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.common.JustForTest;
 import com.alibaba.nacos.common.http.Callback;
-import com.alibaba.nacos.common.http.HttpClientManager;
+import com.alibaba.nacos.common.http.HttpClientBeanHolder;
 import com.alibaba.nacos.common.http.HttpUtils;
-import com.alibaba.nacos.common.http.NAsyncHttpClient;
+import com.alibaba.nacos.common.http.client.NacosAsyncRestTemplate;
 import com.alibaba.nacos.common.http.param.Header;
 import com.alibaba.nacos.common.http.param.Query;
 import com.alibaba.nacos.common.model.RestResult;
+import com.alibaba.nacos.common.notify.Event;
+import com.alibaba.nacos.common.notify.NotifyCenter;
+import com.alibaba.nacos.common.notify.listener.Subscriber;
 import com.alibaba.nacos.common.utils.ConcurrentHashSet;
 import com.alibaba.nacos.common.utils.ExceptionUtil;
 import com.alibaba.nacos.common.utils.VersionUtils;
 import com.alibaba.nacos.core.cluster.lookup.LookupFactory;
-import com.alibaba.nacos.core.notify.Event;
-import com.alibaba.nacos.core.notify.NotifyCenter;
-import com.alibaba.nacos.core.notify.listener.Subscribe;
 import com.alibaba.nacos.core.utils.ApplicationUtils;
 import com.alibaba.nacos.core.utils.Commons;
 import com.alibaba.nacos.core.utils.Constants;
@@ -78,7 +78,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 @Component(value = "serverMemberManager")
 public class ServerMemberManager implements ApplicationListener<WebServerInitializedEvent> {
     
-    private final NAsyncHttpClient asyncHttpClient = HttpClientManager.getAsyncHttpClient();
+    private final NacosAsyncRestTemplate asyncRestTemplate = HttpClientBeanHolder.getNacosAsyncRestTemplate(Loggers.CORE);
     
     /**
      * Cluster node list.
@@ -166,7 +166,7 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
         
         // The address information of this node needs to be dynamically modified
         // when registering the IP change of this node
-        NotifyCenter.registerSubscribe(new Subscribe<InetUtils.IPChangeEvent>() {
+        NotifyCenter.registerSubscriber(new Subscriber<InetUtils.IPChangeEvent>() {
             @Override
             public void onEvent(InetUtils.IPChangeEvent event) {
                 String newAddress = event.getNewIp() + ":" + port;
@@ -452,7 +452,7 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
                             "/cluster/report");
             
             try {
-                asyncHttpClient
+                asyncRestTemplate
                         .post(url, Header.newInstance().addParam(Constants.NACOS_SERVER_HEADER, VersionUtils.version),
                                 Query.EMPTY, getSelf(), reference.getType(), new Callback<String>() {
                                     @Override
@@ -481,6 +481,11 @@ public class ServerMemberManager implements ApplicationListener<WebServerInitial
                                                         target.getAddress(),
                                                         ExceptionUtil.getAllExceptionMsg(throwable));
                                         MemberUtils.onFail(target, throwable);
+                                    }
+            
+                                    @Override
+                                    public void onCancel() {
+                
                                     }
                                 });
             } catch (Throwable ex) {

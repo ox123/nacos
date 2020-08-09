@@ -18,6 +18,7 @@ package com.alibaba.nacos.config.server.service.repository.embedded;
 
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.common.utils.MD5Utils;
+import com.alibaba.nacos.common.notify.NotifyCenter;
 import com.alibaba.nacos.config.server.configuration.ConditionOnEmbeddedStorage;
 import com.alibaba.nacos.config.server.constant.Constants;
 import com.alibaba.nacos.config.server.enums.FileTypeEnum;
@@ -48,7 +49,6 @@ import com.alibaba.nacos.config.server.service.sql.EmbeddedStorageContextUtils;
 import com.alibaba.nacos.config.server.utils.LogUtil;
 import com.alibaba.nacos.config.server.utils.ParamUtils;
 import com.alibaba.nacos.core.distributed.id.IdGeneratorManager;
-import com.alibaba.nacos.core.notify.NotifyCenter;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
@@ -86,7 +86,7 @@ import static com.alibaba.nacos.config.server.service.repository.RowMapperManage
 import static com.alibaba.nacos.config.server.service.repository.RowMapperManager.HISTORY_DETAIL_ROW_MAPPER;
 import static com.alibaba.nacos.config.server.service.repository.RowMapperManager.HISTORY_LIST_ROW_MAPPER;
 import static com.alibaba.nacos.config.server.service.repository.RowMapperManager.TENANT_INFO_ROW_MAPPER;
-import static com.alibaba.nacos.config.server.utils.LogUtil.defaultLog;
+import static com.alibaba.nacos.config.server.utils.LogUtil.DEFAULT_LOG;
 
 /**
  * For Apache Derby.
@@ -174,7 +174,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
     
     @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
     public String getCurrentDBUrl() {
-        return this.dataSourceService.getCurrentDBUrl();
+        return this.dataSourceService.getCurrentDbUrl();
     }
     
     public DatabaseOperate getDatabaseOperate() {
@@ -1078,8 +1078,8 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
     
     @Override
     public int configInfoCount(String tenant) {
-        String sql = " SELECT COUNT(ID) FROM config_info where tenant_id like '" + tenant + "'";
-        Integer result = databaseOperate.queryOne(sql, Integer.class);
+        String sql = " SELECT COUNT(ID) FROM config_info where tenant_id like ?";
+        Integer result = databaseOperate.queryOne(sql, new Object[] {tenant}, Integer.class);
         if (result == null) {
             throw new IllegalArgumentException("configInfoCount error");
         }
@@ -2005,7 +2005,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
             int pageSize) {
         String tenantTmp = StringUtils.isBlank(tenant) ? StringUtils.EMPTY : tenant;
         String sqlCountRows = "select count(*) from his_config_info where data_id = ? and group_id = ? and tenant_id = ?";
-        String sqlFetchRows = "select nid,data_id,group_id,tenant_id,app_name,src_ip,op_type,gmt_create,gmt_modified from his_config_info where data_id = ? and group_id = ? and tenant_id = ? order by nid desc";
+        String sqlFetchRows = "select nid,data_id,group_id,tenant_id,app_name,src_ip,src_user,op_type,gmt_create,gmt_modified from his_config_info where data_id = ? and group_id = ? and tenant_id = ? order by nid desc";
         
         PaginationHelper<ConfigHistoryInfo> helper = createPaginationHelper();
         return helper.fetchPage(sqlCountRows, sqlFetchRows, new Object[] {dataId, group, tenantTmp}, pageNo, pageSize,
@@ -2194,7 +2194,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
     
     @Override
     public boolean isExistTable(String tableName) {
-        String sql = String.format("select 1 from %s limit 1", tableName);
+        String sql = String.format("SELECT 1 FROM %s FETCH FIRST ROW ONLY", tableName);
         try {
             databaseOperate.queryOne(sql, Integer.class);
             return true;
@@ -2205,7 +2205,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
     
     @Override
     public Boolean completeMd5() {
-        defaultLog.info("[start completeMd5]");
+        DEFAULT_LOG.info("[start completeMd5]");
         int perPageSize = 1000;
         int rowCount = configInfoCount();
         int pageCount = (int) Math.ceil(rowCount * 1.0 / perPageSize);
@@ -2222,7 +2222,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
                         try {
                             updateMd5(cf.getDataId(), cf.getGroup(), tenant, md5, new Timestamp(cf.getLastModified()));
                         } catch (Throwable e) {
-                            LogUtil.defaultLog
+                            LogUtil.DEFAULT_LOG
                                     .error("[completeMd5-error] datId:{} group:{} lastModified:{}", cf.getDataId(),
                                             cf.getGroup(), new Timestamp(cf.getLastModified()));
                         }
@@ -2232,7 +2232,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
                                 updateMd5(cf.getDataId(), cf.getGroup(), tenant, md5,
                                         new Timestamp(cf.getLastModified()));
                             } catch (Throwable e) {
-                                LogUtil.defaultLog
+                                LogUtil.DEFAULT_LOG
                                         .error("[completeMd5-error] datId:{} group:{} lastModified:{}", cf.getDataId(),
                                                 cf.getGroup(), new Timestamp(cf.getLastModified()));
                             }
@@ -2241,7 +2241,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
                 }
                 
                 actualRowCount += page.getPageItems().size();
-                defaultLog.info("[completeMd5] {} / {}", actualRowCount, rowCount);
+                DEFAULT_LOG.info("[completeMd5] {} / {}", actualRowCount, rowCount);
             }
         }
         return true;
@@ -2298,7 +2298,7 @@ public class EmbeddedStoragePersistServiceImpl implements PersistService {
                 ParamUtils
                         .checkParam(configInfo.getDataId(), configInfo.getGroup(), "datumId", configInfo.getContent());
             } catch (Throwable e) {
-                defaultLog.error("data verification failed", e);
+                DEFAULT_LOG.error("data verification failed", e);
                 throw e;
             }
             ConfigInfo configInfo2Save = new ConfigInfo(configInfo.getDataId(), configInfo.getGroup(),

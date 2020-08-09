@@ -31,6 +31,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
+import java.util.List;
 
 import static com.alibaba.nacos.config.server.service.repository.RowMapperManager.USER_ROW_MAPPER;
 
@@ -65,7 +66,7 @@ public class ExternalUserPersistServiceImpl implements UserPersistService {
         try {
             jt.update(sql, username, password, true);
         } catch (CannotGetJdbcConnectionException e) {
-            LogUtil.fatalLog.error("[db-error] " + e.toString(), e);
+            LogUtil.FATAL_LOG.error("[db-error] " + e.toString(), e);
             throw e;
         }
     }
@@ -80,7 +81,7 @@ public class ExternalUserPersistServiceImpl implements UserPersistService {
         try {
             jt.update(sql, username);
         } catch (CannotGetJdbcConnectionException e) {
-            LogUtil.fatalLog.error("[db-error] " + e.toString(), e);
+            LogUtil.FATAL_LOG.error("[db-error] " + e.toString(), e);
             throw e;
         }
     }
@@ -95,7 +96,7 @@ public class ExternalUserPersistServiceImpl implements UserPersistService {
         try {
             jt.update("UPDATE users SET password = ? WHERE username=?", password, username);
         } catch (CannotGetJdbcConnectionException e) {
-            LogUtil.fatalLog.error("[db-error] " + e.toString(), e);
+            LogUtil.FATAL_LOG.error("[db-error] " + e.toString(), e);
             throw e;
         }
     }
@@ -111,12 +112,12 @@ public class ExternalUserPersistServiceImpl implements UserPersistService {
         try {
             return this.jt.queryForObject(sql, new Object[] {username}, USER_ROW_MAPPER);
         } catch (CannotGetJdbcConnectionException e) {
-            LogUtil.fatalLog.error("[db-error] " + e.toString(), e);
+            LogUtil.FATAL_LOG.error("[db-error] " + e.toString(), e);
             throw e;
         } catch (EmptyResultDataAccessException e) {
             return null;
         } catch (Exception e) {
-            LogUtil.fatalLog.error("[db-other-error]" + e.getMessage(), e);
+            LogUtil.FATAL_LOG.error("[db-other-error]" + e.getMessage(), e);
             throw new RuntimeException(e);
         }
     }
@@ -141,8 +142,15 @@ public class ExternalUserPersistServiceImpl implements UserPersistService {
             }
             return pageInfo;
         } catch (CannotGetJdbcConnectionException e) {
-            LogUtil.fatalLog.error("[db-error] " + e.toString(), e);
+            LogUtil.FATAL_LOG.error("[db-error] " + e.toString(), e);
             throw e;
         }
+    }
+
+    @Override
+    public List<String> findUserLikeUsername(String username) {
+        String sql = "SELECT username FROM users WHERE username like '%' ? '%'";
+        List<String> users = this.jt.queryForList(sql, new String[]{username}, String.class);
+        return users;
     }
 }

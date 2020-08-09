@@ -16,12 +16,13 @@
 
 package com.alibaba.nacos.config.server.utils;
 
+import com.alibaba.nacos.core.auth.User;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.servlet.http.HttpServletRequest;
 
 /**
- * Request util
+ * Request util.
  *
  * @author Nacos
  */
@@ -35,10 +36,12 @@ public class RequestUtil {
     
     public static final String CLIENT_APPNAME_HEADER = "Client-AppName";
     
+    public static final String NACOS_USER_KEY = "nacosuser";
+    
     /**
      * get real client ip
-     * <p>
-     * first use X-Forwarded-For header    https://zh.wikipedia.org/wiki/X-Forwarded-For next nginx X-Real-IP last
+     *
+     * <p>first use X-Forwarded-For header    https://zh.wikipedia.org/wiki/X-Forwarded-For next nginx X-Real-IP last
      * {@link HttpServletRequest#getRemoteAddr()}
      *
      * @param request {@link HttpServletRequest}
@@ -54,14 +57,40 @@ public class RequestUtil {
     }
     
     /**
-     * 获取 header 中的客服端应用名称
-     * <p>
+     * Gets the name of the client application in the header.
      *
      * @param request {@link HttpServletRequest}
-     * @return 可能为 null
+     * @return may be return null
      */
     public static String getAppName(HttpServletRequest request) {
         return request.getHeader(CLIENT_APPNAME_HEADER);
+    }
+    
+    /**
+     * Gets the user of the client application in the Attribute.
+     *
+     * @param request {@link HttpServletRequest}
+     * @return may be return null
+     */
+    public static User getUser(HttpServletRequest request) {
+        Object userObj = request.getAttribute(NACOS_USER_KEY);
+        if (userObj == null) {
+            return null;
+        }
+        
+        User user = (User) userObj;
+        return user;
+    }
+    
+    /**
+     * Gets the username of the client application in the Attribute.
+     *
+     * @param request {@link HttpServletRequest}
+     * @return may be return null
+     */
+    public static String getSrcUserName(HttpServletRequest request) {
+        User user = getUser(request);
+        return user == null ? null : user.getUserName();
     }
     
 }

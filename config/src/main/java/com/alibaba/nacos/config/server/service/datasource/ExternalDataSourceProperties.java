@@ -45,7 +45,7 @@ public class ExternalDataSourceProperties {
     
     public static final int DEFAULT_MAX_POOL_SIZE = 20;
     
-    public static final int DEFAULT_MINIMUM_IDLE = 50;
+    public static final int DEFAULT_MINIMUM_IDLE = 20;
     
     private Integer num;
     
@@ -117,13 +117,13 @@ public class ExternalDataSourceProperties {
         return dataSources;
     }
     
-    interface Callback<DataSource> {
+    interface Callback<D> {
         
         /**
          * Perform custom logic.
          *
-         * @param dataSource dataSource.
+         * @param datasource dataSource.
          */
-        void accept(DataSource dataSource);
+        void accept(D datasource);
     }
 }

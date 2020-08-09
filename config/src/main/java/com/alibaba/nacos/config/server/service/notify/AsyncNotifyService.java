@@ -16,27 +16,25 @@
 
 package com.alibaba.nacos.config.server.service.notify;
 
+import com.alibaba.nacos.common.http.Callback;
+import com.alibaba.nacos.common.http.client.NacosAsyncRestTemplate;
+import com.alibaba.nacos.common.http.param.Header;
+import com.alibaba.nacos.common.http.param.Query;
+import com.alibaba.nacos.common.model.RestResult;
+import com.alibaba.nacos.common.notify.Event;
+import com.alibaba.nacos.common.notify.NotifyCenter;
+import com.alibaba.nacos.common.notify.listener.Subscriber;
 import com.alibaba.nacos.config.server.constant.Constants;
-import com.alibaba.nacos.config.server.monitor.MetricsMonitor;
 import com.alibaba.nacos.config.server.model.event.ConfigDataChangeEvent;
+import com.alibaba.nacos.config.server.monitor.MetricsMonitor;
 import com.alibaba.nacos.config.server.service.trace.ConfigTraceService;
+import com.alibaba.nacos.config.server.utils.ConfigExecutor;
 import com.alibaba.nacos.config.server.utils.LogUtil;
-import com.alibaba.nacos.config.server.utils.PropertyUtil;
-import com.alibaba.nacos.config.server.utils.event.EventDispatcher.AbstractEventListener;
-import com.alibaba.nacos.config.server.utils.event.EventDispatcher.Event;
 import com.alibaba.nacos.core.cluster.Member;
 import com.alibaba.nacos.core.cluster.ServerMemberManager;
 import com.alibaba.nacos.core.utils.ApplicationUtils;
 import com.alibaba.nacos.core.utils.InetUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.utils.HttpClientUtils;
-import org.apache.http.concurrent.FutureCallback;
-import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
-import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,15 +43,9 @@ import org.springframework.stereotype.Service;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -62,57 +54,48 @@ import java.util.concurrent.TimeUnit;
  * @author Nacos
  */
 @Service
-public class AsyncNotifyService extends AbstractEventListener {
-    
-    @Override
-    public List<Class<? extends Event>> interest() {
-        List<Class<? extends Event>> types = new ArrayList<Class<? extends Event>>();
-        // Trigger configuration change synchronization notification
-        types.add(ConfigDataChangeEvent.class);
-        return types;
-    }
-    
-    @Override
-    public void onEvent(Event event) {
-        
-        // Generate ConfigDataChangeEvent concurrently
-        if (event instanceof ConfigDataChangeEvent) {
-            ConfigDataChangeEvent evt = (ConfigDataChangeEvent) event;
-            long dumpTs = evt.lastModifiedTs;
-            String dataId = evt.dataId;
-            String group = evt.group;
-            String tenant = evt.tenant;
-            String tag = evt.tag;
-            Collection<Member> ipList = memberManager.allMembers();
-            
-            // In fact, any type of queue here can be
-            Queue<NotifySingleTask> queue = new LinkedList<NotifySingleTask>();
-            for (Member member : ipList) {
-                queue.add(new NotifySingleTask(dataId, group, tenant, tag, dumpTs, member.getAddress(), evt.isBeta));
-            }
-            EXECUTOR.execute(new AsyncTask(httpclient, queue));
-        }
-    }
+public class AsyncNotifyService {
     
     @Autowired
     public AsyncNotifyService(ServerMemberManager memberManager) {
         this.memberManager = memberManager;
-        httpclient.start();
+        
+        // Register ConfigDataChangeEvent to NotifyCenter.
+        NotifyCenter.registerToPublisher(ConfigDataChangeEvent.class, NotifyCenter.ringBufferSize);
+        
+        // Register A Subscriber to subscribe ConfigDataChangeEvent.
+        NotifyCenter.registerSubscriber(new Subscriber() {
+            
+            @Override
+            public void onEvent(Event event) {
+                // Generate ConfigDataChangeEvent concurrently
+                if (event instanceof ConfigDataChangeEvent) {
+                    ConfigDataChangeEvent evt = (ConfigDataChangeEvent) event;
+                    long dumpTs = evt.lastModifiedTs;
+                    String dataId = evt.dataId;
+                    String group = evt.group;
+                    String tenant = evt.tenant;
+                    String tag = evt.tag;
+                    Collection<Member> ipList = memberManager.allMembers();
+                    
+                    // In fact, any type of queue here can be
+                    Queue<NotifySingleTask> queue = new LinkedList<NotifySingleTask>();
+                    for (Member member : ipList) {
+                        queue.add(new NotifySingleTask(dataId, group, tenant, tag, dumpTs, member.getAddress(),
+                                evt.isBeta));
+                    }
+                    ConfigExecutor.executeAsyncNotify(new AsyncTask(nacosAsyncRestTemplate, queue));
+                }
+            }
+            
+            @Override
+            public Class<? extends Event> subscribeType() {
+                return ConfigDataChangeEvent.class;
+            }
+        });
     }
     
-    public Executor getExecutor() {
-        return EXECUTOR;
-    }
-    
-    @SuppressWarnings("PMD.ThreadPoolCreationRule")
-    private static final Executor EXECUTOR = Executors.newScheduledThreadPool(100, new NotifyThreadFactory());
-    
-    private RequestConfig requestConfig = RequestConfig.custom()
-            .setConnectTimeout(PropertyUtil.getNotifyConnectTimeout())
-            .setSocketTimeout(PropertyUtil.getNotifySocketTimeout()).build();
-    
-    private CloseableHttpAsyncClient httpclient = HttpAsyncClients.custom().setDefaultRequestConfig(requestConfig)
-            .build();
+    private final NacosAsyncRestTemplate nacosAsyncRestTemplate = HttpClientManager.getNacosAsyncRestTemplate();
     
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncNotifyService.class);
     
@@ -120,8 +103,12 @@ public class AsyncNotifyService extends AbstractEventListener {
     
     class AsyncTask implements Runnable {
         
-        public AsyncTask(CloseableHttpAsyncClient httpclient, Queue<NotifySingleTask> queue) {
-            this.httpclient = httpclient;
+        private Queue<NotifySingleTask> queue;
+    
+        private NacosAsyncRestTemplate restTemplate;
+        
+        public AsyncTask(NacosAsyncRestTemplate restTemplate, Queue<NotifySingleTask> queue) {
+            this.restTemplate = restTemplate;
             this.queue = queue;
         }
         
@@ -145,52 +132,47 @@ public class AsyncNotifyService extends AbstractEventListener {
                         // get delay time and set fail count to the task
                         asyncTaskExecute(task);
                     } else {
-                        HttpGet request = new HttpGet(task.url);
-                        request.setHeader(NotifyService.NOTIFY_HEADER_LAST_MODIFIED,
-                                String.valueOf(task.getLastModified()));
-                        request.setHeader(NotifyService.NOTIFY_HEADER_OP_HANDLE_IP, InetUtils.getSelfIp());
+                        Header header = Header.newInstance();
+                        header.addParam(NotifyService.NOTIFY_HEADER_LAST_MODIFIED, String.valueOf(task.getLastModified()));
+                        header.addParam(NotifyService.NOTIFY_HEADER_OP_HANDLE_IP, InetUtils.getSelfIp());
                         if (task.isBeta) {
-                            request.setHeader("isBeta", "true");
+                            header.addParam("isBeta", "true");
                         }
-                        httpclient.execute(request, new AsyncNotifyCallBack(httpclient, task));
+                        restTemplate.get(task.url, header, Query.EMPTY, String.class, new AsyncNotifyCallBack(task));
                     }
                 }
             }
         }
-        
-        private Queue<NotifySingleTask> queue;
-        
-        private CloseableHttpAsyncClient httpclient;
-        
     }
     
     private void asyncTaskExecute(NotifySingleTask task) {
         int delay = getDelayTime(task);
         Queue<NotifySingleTask> queue = new LinkedList<NotifySingleTask>();
         queue.add(task);
-        AsyncTask asyncTask = new AsyncTask(httpclient, queue);
-        ((ScheduledThreadPoolExecutor) EXECUTOR).schedule(asyncTask, delay, TimeUnit.MILLISECONDS);
+        AsyncTask asyncTask = new AsyncTask(nacosAsyncRestTemplate, queue);
+        ConfigExecutor.scheduleAsyncNotify(asyncTask, delay, TimeUnit.MILLISECONDS);
     }
     
-    class AsyncNotifyCallBack implements FutureCallback<HttpResponse> {
+    class AsyncNotifyCallBack implements Callback<String> {
+    
+        private NotifySingleTask task;
         
-        public AsyncNotifyCallBack(CloseableHttpAsyncClient httpClient, NotifySingleTask task) {
+        public AsyncNotifyCallBack(NotifySingleTask task) {
             this.task = task;
-            this.httpClient = httpClient;
         }
         
         @Override
-        public void completed(HttpResponse response) {
+        public void onReceive(RestResult<String> result) {
             
             long delayed = System.currentTimeMillis() - task.getLastModified();
             
-            if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+            if (result.ok()) {
                 ConfigTraceService.logNotifyEvent(task.getDataId(), task.getGroup(), task.getTenant(), null,
                         task.getLastModified(), InetUtils.getSelfIp(), ConfigTraceService.NOTIFY_EVENT_OK, delayed,
                         task.target);
             } else {
                 LOGGER.error("[notify-error] target:{} dataId:{} group:{} ts:{} code:{}", task.target, task.getDataId(),
-                        task.getGroup(), task.getLastModified(), response.getStatusLine().getStatusCode());
+                        task.getGroup(), task.getLastModified(), result.getCode());
                 ConfigTraceService.logNotifyEvent(task.getDataId(), task.getGroup(), task.getTenant(), null,
                         task.getLastModified(), InetUtils.getSelfIp(), ConfigTraceService.NOTIFY_EVENT_ERROR, delayed,
                         task.target);
@@ -198,17 +180,16 @@ public class AsyncNotifyService extends AbstractEventListener {
                 //get delay time and set fail count to the task
                 asyncTaskExecute(task);
                 
-                LogUtil.notifyLog
+                LogUtil.NOTIFY_LOG
                         .error("[notify-retry] target:{} dataId:{} group:{} ts:{}", task.target, task.getDataId(),
                                 task.getGroup(), task.getLastModified());
                 
                 MetricsMonitor.getConfigNotifyException().increment();
             }
-            HttpClientUtils.closeQuietly(response);
         }
         
         @Override
-        public void failed(Exception ex) {
+        public void onError(Throwable ex) {
             
             long delayed = System.currentTimeMillis() - task.getLastModified();
             LOGGER.error("[notify-exception] target:{} dataId:{} group:{} ts:{} ex:{}", task.target, task.getDataId(),
@@ -219,29 +200,25 @@ public class AsyncNotifyService extends AbstractEventListener {
             
             //get delay time and set fail count to the task
             asyncTaskExecute(task);
-            LogUtil.notifyLog.error("[notify-retry] target:{} dataId:{} group:{} ts:{}", task.target, task.getDataId(),
+            LogUtil.NOTIFY_LOG.error("[notify-retry] target:{} dataId:{} group:{} ts:{}", task.target, task.getDataId(),
                     task.getGroup(), task.getLastModified());
             
             MetricsMonitor.getConfigNotifyException().increment();
         }
         
         @Override
-        public void cancelled() {
+        public void onCancel() {
             
-            LogUtil.notifyLog.error("[notify-exception] target:{} dataId:{} group:{} ts:{} method:{}", task.target,
+            LogUtil.NOTIFY_LOG.error("[notify-exception] target:{} dataId:{} group:{} ts:{} method:{}", task.target,
                     task.getDataId(), task.getGroup(), task.getLastModified(), "CANCELED");
             
             //get delay time and set fail count to the task
             asyncTaskExecute(task);
-            LogUtil.notifyLog.error("[notify-retry] target:{} dataId:{} group:{} ts:{}", task.target, task.getDataId(),
+            LogUtil.NOTIFY_LOG.error("[notify-retry] target:{} dataId:{} group:{} ts:{}", task.target, task.getDataId(),
                     task.getGroup(), task.getLastModified());
             
             MetricsMonitor.getConfigNotifyException().increment();
         }
-        
-        private NotifySingleTask task;
-        
-        private CloseableHttpAsyncClient httpClient;
     }
     
     static class NotifySingleTask extends NotifyTask {
@@ -308,16 +285,6 @@ public class AsyncNotifyService extends AbstractEventListener {
             return target;
         }
         
-    }
-    
-    static class NotifyThreadFactory implements ThreadFactory {
-        
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread thread = new Thread(r, "com.alibaba.nacos.AsyncNotifyServiceThread");
-            thread.setDaemon(true);
-            return thread;
-        }
     }
     
     /**
