@@ -100,8 +100,9 @@ public class GlobalExecutor {
                     new NameThreadFactory("com.alibaba.nacos.naming.tcp.check.worker"));
     
     private static final ScheduledExecutorService NAMING_HEALTH_EXECUTOR = ExecutorFactory.Managed
-            .newScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class), DEFAULT_THREAD_COUNT,
-                    new NameThreadFactory("com.alibaba.nacos.naming.health"));
+            .newScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
+                    Integer.max(Integer.getInteger("com.alibaba.nacos.naming.health.thread.num", DEFAULT_THREAD_COUNT),
+                            1), new NameThreadFactory("com.alibaba.nacos.naming.health"));
     
     private static final ScheduledExecutorService RETRANSMITTER_EXECUTOR = ExecutorFactory.Managed
             .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
@@ -115,8 +116,8 @@ public class GlobalExecutor {
             .newSingleScheduledExecutorService(ClassUtils.getCanonicalName(NamingApp.class),
                     new NameThreadFactory("com.alibaba.nacos.naming.nacos-server-performance"));
     
-    public static void registerMasterElection(Runnable runnable) {
-        NAMING_TIMER_EXECUTOR.scheduleAtFixedRate(runnable, 0, TICK_PERIOD_MS, TimeUnit.MILLISECONDS);
+    public static ScheduledFuture registerMasterElection(Runnable runnable) {
+        return NAMING_TIMER_EXECUTOR.scheduleAtFixedRate(runnable, 0, TICK_PERIOD_MS, TimeUnit.MILLISECONDS);
     }
     
     public static void registerServerInfoUpdater(Runnable runnable) {
@@ -131,12 +132,16 @@ public class GlobalExecutor {
         NAMING_TIMER_EXECUTOR.scheduleAtFixedRate(runnable, 0, SERVER_STATUS_UPDATE_PERIOD, TimeUnit.MILLISECONDS);
     }
     
-    public static void registerHeartbeat(Runnable runnable) {
-        NAMING_TIMER_EXECUTOR.scheduleWithFixedDelay(runnable, 0, TICK_PERIOD_MS, TimeUnit.MILLISECONDS);
+    public static ScheduledFuture registerHeartbeat(Runnable runnable) {
+        return NAMING_TIMER_EXECUTOR.scheduleWithFixedDelay(runnable, 0, TICK_PERIOD_MS, TimeUnit.MILLISECONDS);
     }
     
     public static void scheduleMcpPushTask(Runnable runnable, long initialDelay, long period) {
         NAMING_TIMER_EXECUTOR.scheduleAtFixedRate(runnable, initialDelay, period, TimeUnit.MILLISECONDS);
+    }
+    
+    public static ScheduledFuture submitClusterVersionJudge(Runnable runnable, long delay) {
+        return NAMING_TIMER_EXECUTOR.schedule(runnable, delay, TimeUnit.MILLISECONDS);
     }
     
     public static void submitDistroNotifyTask(Runnable runnable) {

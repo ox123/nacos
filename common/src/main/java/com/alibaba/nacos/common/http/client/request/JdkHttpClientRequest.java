@@ -24,12 +24,14 @@ import com.alibaba.nacos.common.http.client.response.JdkHttpClientResponse;
 import com.alibaba.nacos.common.http.param.Header;
 import com.alibaba.nacos.common.http.param.MediaType;
 import com.alibaba.nacos.common.model.RequestHttpEntity;
+import com.alibaba.nacos.common.utils.IoUtils;
 import com.alibaba.nacos.common.utils.JacksonUtils;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.util.HashMap;
@@ -90,7 +92,7 @@ public class JdkHttpClientRequest implements HttpClientRequest {
         conn.setConnectTimeout(this.httpClientConfig.getConTimeOutMillis());
         conn.setReadTimeout(this.httpClientConfig.getReadTimeOutMillis());
         conn.setRequestMethod(httpMethod);
-        if (body != null) {
+        if (body != null && !"".equals(body)) {
             String contentType = headers.getValue(HttpHeaderConsts.CONTENT_TYPE);
             String bodyStr = JacksonUtils.toJson(body);
             if (MediaType.APPLICATION_FORM_URLENCODED.equals(contentType)) {
@@ -101,9 +103,10 @@ public class JdkHttpClientRequest implements HttpClientRequest {
                 conn.setDoOutput(true);
                 byte[] b = bodyStr.getBytes();
                 conn.setRequestProperty("Content-Length", String.valueOf(b.length));
-                conn.getOutputStream().write(b, 0, b.length);
-                conn.getOutputStream().flush();
-                conn.getOutputStream().close();
+                OutputStream outputStream = conn.getOutputStream();
+                outputStream.write(b, 0, b.length);
+                outputStream.flush();
+                IoUtils.closeQuietly(outputStream);
             }
         }
         conn.connect();
